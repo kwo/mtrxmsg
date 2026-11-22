@@ -24,7 +24,7 @@ All other Go packages live under `pkg/` and are importable by other modules. Do 
 | `pkg/matrix/` | Implement Matrix commands, including session storage and encryption. |
 | `pkg/version/` | Provide build and runtime version information. |
 
-The initial build command is `CGO_ENABLED=0 go build -o mtrxmsg .`. There is no `cmd/mtrxmsg/` directory.
+The build command is `CGO_ENABLED=0 go build -tags goolm -o mtrxmsg .`. There is no `cmd/mtrxmsg/` directory.
 
 ### Command and library boundary
 
@@ -57,7 +57,7 @@ Use `go get -tool <package>@<version>` to add each tool to `go.mod`. Once declar
 
 | Planned command | Purpose |
 | --- | --- |
-| `mtrxmsg login --homeserver <url> [--callback-port <port>]` | Print an OIDC sign-in URL and wait for the callback. Use a fixed port for SSH sign-in. |
+| `mtrxmsg login --homeserver <url> [--callback-port <port>]` | Print an OIDC sign-in URL and wait for the callback. A tunnel requires a fixed port. |
 | `mtrxmsg logout` | End the current Matrix session. |
 | `mtrxmsg version` | Show the `mtrxmsg` version. |
 | `mtrxmsg send <room> <message>` | Send a text message to a room by alias or ID. |
@@ -104,6 +104,31 @@ The CLI will use the authorization code flow with PKCE (`S256`) and request the 
 On Skybox, Tuwunel sends the browser to Pocket ID and issues the Matrix credentials after sign-in. The CLI does not open a browser or ask for a Pocket ID password or passkey.
 
 ### Sign in over SSH
+
+#### Paste the callback URL (no tunnel)
+
+1. Connect to the CLI host with SSH.
+2. Run the login command. Leave it open while you complete sign-in.
+
+   ```sh
+   mtrxmsg login --homeserver https://matrix.ostendorf.com
+   ```
+
+3. Open the printed sign-in URL in your browser.
+4. After you approve sign-in, copy the full `http://127.0.0.1:<port>/callback?…` URL from the browser address bar. The browser can show a connection error because the listener runs on the CLI host.
+5. Open a second terminal on the CLI host. Run the first command, paste the callback URL at the prompt, and press Enter. Then run the other two commands.
+
+   ```sh
+   IFS= read -r -s -p 'Paste the callback URL: ' callback_url; printf '\n'
+   printf 'url = "%s"\n' "$callback_url" | curl --noproxy '*' -fsS --config -
+   unset callback_url
+   ```
+
+6. Return to the first terminal for the login result.
+
+The callback URL contains a one-time code. The commands do not put the URL in shell history or in the curl argument list.
+
+#### Use an SSH tunnel (optional)
 
 1. From the browser machine, start SSH with local port forwarding. This example runs the CLI on Skybox:
 
@@ -190,7 +215,16 @@ Test Matrix workflows through the library with a local HTTP test server and temp
 
 The crypto probe used Go `1.27.4` on Linux AMD64. `CGO_ENABLED=0 go build -tags goolm` produced a statically linked binary. The same build without `goolm` failed because cgo was unavailable for `libolm`.
 
-The disposable server used the same Tuwunel binary as Skybox. It used a fresh database and test accounts, not the live server's data. Both phase 2 compatibility checks passed with temporary probes. Element device verification remains a phase 5 check for the implemented CLI.
+The disposable server used the same Tuwunel binary as Skybox. It used a fresh database and test accounts, not the live server's data. Both phase 2 compatibility checks passed with temporary probes.
+
+### CLI acceptance
+
+- The automated tests cover OAuth callback validation, token rotation, revocation errors, room and message commands, persistent encryption state, and SAS device verification.
+- The built CLI on Skybox completed OAuth sign-in through an SSH tunnel to a disposable Tuwunel server. A second process confirmed the saved device with `whoami`.
+- On disposable Tuwunel, the CLI exchanged encrypted messages across restarts. The server received encrypted events with no plaintext body.
+- On disposable Tuwunel, refresh rotated both tokens. Logout revoked the refreshed session and removed the local session and crypto files.
+- The user confirmed live Pocket ID sign-in and Element device verification with the built CLI.
+- The local and Skybox CLI devices exchanged fresh encrypted messages in both directions on the live server. Older messages without keys still show `[cannot decrypt]`.
 
 ## References
 
