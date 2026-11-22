@@ -15,6 +15,7 @@ vars:
   COMMIT_DATE:
     sh: TZ=UTC git show -s --format=%cd --date=format-local:%Y-%m-%d HEAD 2>/dev/null || printf unknown
   LDFLAGS: >-
+    -s -w
     -X github.com/kwo/mtrxmsg/pkg/version.buildVersion={{.VERSION}}
     -X github.com/kwo/mtrxmsg/pkg/version.buildCommitHash={{.COMMIT_HASH}}
     -X github.com/kwo/mtrxmsg/pkg/version.buildCommitDate={{.COMMIT_DATE}}
@@ -22,11 +23,17 @@ vars:
 tasks:
   default:
     cmds:
-      - task: build
+      - task: install
   build:
     desc: Build mtrxmsg
     cmds:
       - go build -tags goolm -trimpath -buildvcs=false -ldflags "{{.LDFLAGS}}" -o mtrxmsg .
+  install:
+    desc: Install mtrxmsg in the user binary directory
+    deps: [build]
+    cmds:
+      - mkdir -p "$HOME/.local/bin"
+      - cp mtrxmsg "$HOME/.local/bin/mtrxmsg"
   test:
     desc: Run the tests
     cmds:
