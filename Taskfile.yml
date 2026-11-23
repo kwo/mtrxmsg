@@ -4,6 +4,7 @@ env:
   CGO_ENABLED: '0'
 
 vars:
+  BINARY: mtrxmsg
   VERSION:
     sh: |
       dirty_suffix=$(test -z "$(git status --porcelain 2>/dev/null)" || printf '*')
@@ -26,14 +27,17 @@ tasks:
       - task: install
   build:
     desc: Build mtrxmsg
+    env:
+      GOOS: '{{.GOOS}}'
+      GOARCH: '{{.GOARCH}}'
     cmds:
-      - go build -tags goolm -trimpath -buildvcs=false -ldflags "{{.LDFLAGS}}" -o mtrxmsg .
+      - go build -tags goolm -trimpath -buildvcs=false -ldflags "{{.LDFLAGS}}" -o '{{.BINARY}}' .
   install:
     desc: Install mtrxmsg in the user binary directory
     deps: [build]
     cmds:
       - mkdir -p "$HOME/.local/bin"
-      - cp mtrxmsg "$HOME/.local/bin/mtrxmsg"
+      - cp '{{.BINARY}}' "$HOME/.local/bin/mtrxmsg"
   test:
     desc: Run the tests
     cmds:

@@ -12,6 +12,19 @@ go tool task test
 go tool task lint
 ```
 
+## Release builds
+
+The GitHub Actions [Release workflow](.github/workflows/release.yml) builds for macOS and Linux on `amd64` and `arm64`.
+A `v*` tag push to the `github` remote publishes four `.tar.gz` archives and `SHA256SUMS` to GitHub Releases.
+
+To build without a tag:
+
+1. Open **Actions → Release → Run workflow** on GitHub.
+2. Select a branch and click **Run workflow**.
+3. When the run succeeds, download `mtrxmsg-release-archives` from the run summary.
+
+A manual run uses the version `dev-<commit>` and does not publish a release.
+
 ## Sign in
 
 1. Run `./mtrxmsg login --homeserver https://matrix.example.com`. Use the URL of your Matrix homeserver.

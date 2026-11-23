@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Check and build release archives
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Run lint and tests
+        run: |
+          go tool task lint
+          go tool task test
+
+      - name: Build archives
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_EVENT_NAME" == push ]]; then
+            version="$GITHUB_REF_NAME"
+          else
+            version="dev-$(git rev-parse --short=12 HEAD)"
+          fi
+
+          workdir="$(mktemp -d)"
+          trap 'rm -rf "$workdir"' EXIT
+          mkdir -p dist/release
+
+          for target in darwin/arm64 darwin/amd64 linux/amd64 linux/arm64; do
+            goos="${target%/*}"
+            goarch="${target#*/}"
+
+            go tool task build GOOS="$goos" GOARCH="$goarch" \
+              VERSION="$version" BINARY="$workdir/mtrxmsg"
+
+            tar -C "$workdir" -czf "dist/release/mtrxmsg_${version}_${goos}_${goarch}.tar.gz" mtrxmsg
+          done
+
+          cd dist/release
+          sha256sum -- *.tar.gz > SHA256SUMS
+
+      - name: Upload archives and checksums
+        uses: actions/upload-artifact@v7
+        with:
+          name: mtrxmsg-release-archives
+          path: dist/release/
+          if-no-files-found: error
+          compression-level: 0
+
+  publish:
+    name: Publish GitHub Release
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download archives and checksums
+        uses: actions/download-artifact@v8
+        with:
+          name: mtrxmsg-release-archives
+          path: dist/release
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --verify-tag \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            dist/release/*.tar.gz dist/release/SHA256SUMS
